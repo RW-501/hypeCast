@@ -7,6 +7,15 @@ service cloud.firestore {
   function member(e) { return signed() && exists(/databases/$(database)/documents/events/$(e)/team/$(request.auth.uid)); }
   function staff(e) { return owner(e) || member(e); }
   function attendee(e) { return signed() && exists(/databases/$(database)/documents/events/$(e)/participants/$(request.auth.uid)); }
+  match /users/{uid} {
+   allow read: if signed() && request.auth.uid == uid;
+   allow create, update: if signed() && request.auth.uid == uid && request.resource.data.uid == uid;
+   allow delete: if false;
+   match /activities/{activityId} {
+    allow read: if signed() && request.auth.uid == uid;
+    allow write: if false;
+   }
+  }
   match /events/{e} {
    allow create: if signed() && request.resource.data.ownerId == request.auth.uid;
    allow read: if resource.data.visibility == 'public' || staff(e);
@@ -17,7 +26,8 @@ service cloud.firestore {
    }
    match /polls/{p} {
     allow read: if staff(e) || attendee(e);
-    allow create, update, delete: if owner(e);
+    allow create: if owner(e) && request.resource.data.status == 'ready' && request.resource.data.options.size() >= 2 && request.resource.data.options.size() <= 12 && request.resource.data.durationSeconds is number && request.resource.data.durationSeconds >= 0 && request.resource.data.durationSeconds <= 3600 && request.resource.data.resultsVisibility in ['live','after','host'];
+    allow update, delete: if false;
    }
    match /polls/{p}/votes/{v} { allow read, write: if false; }
    match /messages/{m} {
