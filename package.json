@@ -1,0 +1,20 @@
+{
+  "name": "hypecast",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "firebase": "^11.6.0",
+    "lucide": "^0.468.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
