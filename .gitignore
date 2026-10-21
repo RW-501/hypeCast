@@ -6,3 +6,6 @@ dist
 functions/node_modules
 functions/.env
 *.log
+
+*service-account*.json
+**/service-account*.json

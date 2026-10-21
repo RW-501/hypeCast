@@ -18,3 +18,26 @@ export const submitMessage=onCall({enforceAppCheck:false},async req=>{const c=aw
 export const moderateContent=onCall({enforceAppCheck:false},async req=>{const c=await context(req);if(!await staff(c))err('Staff only','permission-denied');const {kind,id,status}=req.data;if(!['messages','media'].includes(kind)||!required(id,128)||!['approved','rejected'].includes(status))err('Invalid moderation request','invalid-argument');const ref=db.doc(`events/${c.eventId}/${kind}/${id}`);if(!(await ref.get()).exists)err('Content not found','not-found');await ref.update({status,moderatedBy:c.uid,moderatedAt:FieldValue.serverTimestamp()});return {ok:true};});
 
 export const setPollStatus=onCall({enforceAppCheck:false},async req=>{const c=await context(req);if(!await staff(c))err('Staff only','permission-denied');const {pollId,status}=req.data||{};if(!required(pollId,128)||!['open','closed'].includes(status))err('Invalid poll state','invalid-argument');const ref=db.doc(`events/${c.eventId}/polls/${pollId}`);await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists)err('Poll not found','not-found');const p=snap.data();if(status==='open'){const seconds=Number(p.durationSeconds||0);tx.update(ref,{status:'open',startedAt:FieldValue.serverTimestamp(),endsAt:seconds>0?new Date(Date.now()+seconds*1000):null});}else tx.update(ref,{status:'closed',closedAt:FieldValue.serverTimestamp()});});return {ok:true};});
+
+
+// Platform-wide administration is server-only. Never trust a client-side admin flag.
+import {getAuth} from 'firebase-admin/auth';
+export const getPlatformOverview=onCall({enforceAppCheck:false},async req=>{
+ if(!req.auth || req.auth.token.platformAdmin!==true)err('Platform administrator access required','permission-denied');
+ const [authUsers,eventSnap]=await Promise.all([getAuth().listUsers(1000),db.collection('events').orderBy('createdAt','desc').limit(30).get()]);
+ // Accurate count across all Firebase Auth pages, not only the first 1,000 users.
+ let registeredUsers=0,anonymousUsers=0;
+ let pageToken;
+ do{
+  const page=pageToken?await getAuth().listUsers(1000,pageToken):authUsers;
+  for(const user of page.users){
+   const anonymous=user.providerData.length===0&&!user.email&&!user.phoneNumber;
+   if(anonymous)anonymousUsers++;else registeredUsers++;
+  }
+  pageToken=page.pageToken;
+ }while(pageToken);
+ const events=eventSnap.docs.map(s=>{const d=s.data();return {id:s.id,name:d.name||'',ownerId:d.ownerId||'',status:d.status||'',createdAt:d.createdAt?.toDate?.()?.toISOString?.()||''}});
+ // Total event count is computed by Firestore's server-side count aggregation.
+ const count=await db.collection('events').count().get();
+ return {registeredUsers,anonymousUsers,totalUsers:registeredUsers+anonymousUsers,eventCount:count.data().count,events};
+});
